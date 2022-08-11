@@ -32,10 +32,10 @@ function Profile() {
         await updateDoc(useRef, {
           name,
         })
-        toast.success('SuccessFully Updated.', {
-          position: 'top-center',
-          autoClose: 1000,
-        })
+        // toast.success('SuccessFully Updated.', {
+        //   position: 'top-center',
+        //   autoClose: 1000,
+        // })
       }
     } catch (error) {
       toast.error('Could Not update profile details', { autoClose: 2000 })
