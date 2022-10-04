@@ -18,7 +18,7 @@ function Profile() {
   const { name, email } = formData
   const navigate = useNavigate()
 
-  const onLogout = (e) => {
+  const onLogout = () => {
     auth.signOut()
     navigate('/')
   }
@@ -50,57 +50,53 @@ function Profile() {
     }))
   }
   return (
-    <>
-      <div className='profile'>
-        <header className='profileHeader'>
-          <p className='pageHeader'>My Profile</p>
-          <button type='button' className='logOut' onClick={onLogout}>
-            Logout
-          </button>
-        </header>
-        <main>
-          <div className='profileDetailsHeader'>
-            <p className='profileDetailsText'>Personal Details</p>
-            <p
-              className='changePersonalDetails'
-              onClick={() => {
-                changeDetails && onSubmit()
-                setChangedDetails((prevState) => !prevState)
-              }}
-            >
-              {changeDetails ? 'Done' : 'Change'}
-            </p>
-          </div>
-          <div className='profileCard'>
-            <form>
-              <input
-                type='text'
-                id='name'
-                className={!changeDetails ? 'profileName' : 'profileNameActive'}
-                disabled={!changeDetails}
-                value={name}
-                onChange={onChnage}
-              />
-              <input
-                type='text'
-                id='email'
-                className={
-                  !changeDetails ? 'profileEmail' : 'profileEmailActive'
-                }
-                disabled={!changeDetails}
-                value={email}
-                onChange={onChnage}
-              />
-            </form>
-          </div>
-          <Link to='/create-listing' className='createListing'>
-            <img src={homeIcon} alt='home' />
-            <p>Sell or rent your home</p>
-            <img src={arrowRight} alt='arrow right' />
-          </Link>
-        </main>
-      </div>
-    </>
+    <div className='profile'>
+      <header className='profileHeader'>
+        <p className='pageHeader'>My Profile</p>
+        <button type='button' className='logOut' onClick={onLogout}>
+          Logout
+        </button>
+      </header>
+      <main>
+        <div className='profileDetailsHeader'>
+          <p className='profileDetailsText'>Personal Details</p>
+          <p
+            className='changePersonalDetails'
+            onClick={() => {
+              changeDetails && onSubmit()
+              setChangedDetails((prevState) => !prevState)
+            }}
+          >
+            {changeDetails ? 'Done' : 'Change'}
+          </p>
+        </div>
+        <div className='profileCard'>
+          <form>
+            <input
+              type='text'
+              id='name'
+              className={!changeDetails ? 'profileName' : 'profileNameActive'}
+              disabled={!changeDetails}
+              value={name}
+              onChange={onChnage}
+            />
+            <input
+              type='text'
+              id='email'
+              className={!changeDetails ? 'profileEmail' : 'profileEmailActive'}
+              disabled={!changeDetails}
+              value={email}
+              onChange={onChnage}
+            />
+          </form>
+        </div>
+        <Link to='/create-listing' className='createListing'>
+          <img src={homeIcon} alt='home' />
+          <p>Sell or rent your home</p>
+          <img src={arrowRight} alt='arrow right' />
+        </Link>
+      </main>
+    </div>
   )
 }
 
