@@ -1,25 +1,23 @@
-import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import { getAuth, onAuthStateChanged } from 'firebase/auth'
-import { useNavigate } from 'react-router-dom'
-import Spinner from '../components/Spinner'
-
 import {
   getStorage,
   ref,
   uploadBytesResumable,
   getDownloadURL,
 } from 'firebase/storage'
-
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
-
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase.config'
-import { v4 as uuidv4 } from 'uuid'
+import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'react-toastify'
-function CreateListing() {
+import { v4 as uuidv4 } from 'uuid'
+import Spinner from '../components/Spinner'
+
+function EditListing() {
   // eslint-disable-next-line
   const [geolocationEnabled, setGeolocationEnabled] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [listing, setListing] = useState(false)
   const [formData, setFormData] = useState({
     type: 'rent',
     name: '',
@@ -30,11 +28,12 @@ function CreateListing() {
     address: '',
     offer: false,
     regularPrice: 0,
-    discountPrice: 0,
+    discountedPrice: 0,
     images: {},
     latitude: 0,
     longitude: 0,
   })
+
   const {
     type,
     name,
@@ -43,18 +42,47 @@ function CreateListing() {
     parking,
     furnished,
     address,
-    regularPrice,
-    discountPrice,
     offer,
+    regularPrice,
+    discountedPrice,
+    images,
     latitude,
     longitude,
-    images,
   } = formData
 
   const auth = getAuth()
   const navigate = useNavigate()
+  const params = useParams()
   const isMounted = useRef(true)
 
+  // Redirect if listing is not user's
+  useEffect(() => {
+    if (listing && listing.userRef !== auth.currentUser.uid) {
+      toast.error('You can not edit that listing')
+      navigate('/')
+    }
+  })
+
+  // Fetch listing to edit
+  useEffect(() => {
+    setLoading(true)
+    const fetchListing = async () => {
+      const docRef = doc(db, 'listings', params.listingId)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists()) {
+        setListing(docSnap.data())
+        setFormData({ ...docSnap.data(), address: docSnap.data().location })
+        setLoading(false)
+      } else {
+        navigate('/')
+        toast.error('Listing does not exist')
+      }
+    }
+
+    fetchListing()
+  }, [params.listingId, navigate])
+
+  // Sets userRef to logged in user
   useEffect(() => {
     if (isMounted) {
       onAuthStateChanged(auth, (user) => {
@@ -65,17 +93,19 @@ function CreateListing() {
         }
       })
     }
+
     return () => {
       isMounted.current = false
     }
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted])
 
   const onSubmit = async (e) => {
     e.preventDefault()
+
     setLoading(true)
 
-    if (discountPrice >= regularPrice) {
+    if (discountedPrice >= regularPrice) {
       setLoading(false)
       toast.error('Discounted price needs to be less than regular price')
       return
@@ -92,34 +122,37 @@ function CreateListing() {
 
     if (geolocationEnabled) {
       const response = await fetch(
-        `http://api.positionstack.com/v1/forward?access_key=${process.env.REACT_APP_GEOCODE_API_KEY}&query=${address}`
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`
       )
 
       const data = await response.json()
 
-      console.log(data.data[0])
+      geolocation.lat = data.results[0]?.geometry.location.lat ?? 0
+      geolocation.lng = data.results[0]?.geometry.location.lng ?? 0
 
-      geolocation.lat = data.data[0]?.latitude ?? 0
-      geolocation.lng = data.data[0]?.longitude ?? 0
-
-      location = data.status === 'ZERO_RESULTS' ? undefined : data.data[0].label
+      location =
+        data.status === 'ZERO_RESULTS'
+          ? undefined
+          : data.results[0]?.formatted_address
 
       if (location === undefined || location.includes('undefined')) {
         setLoading(false)
         toast.error('Please enter a correct address')
-        console.log(location)
         return
       }
     } else {
       geolocation.lat = latitude
       geolocation.lng = longitude
     }
-    //store images to firebase
+
+    // Store image in firebase
     const storeImage = async (image) => {
       return new Promise((resolve, reject) => {
         const storage = getStorage()
-        const fileName = `${auth.currentUser.uid} -${image.name} -${uuidv4()}`
+        const fileName = `${auth.currentUser.uid}-${image.name}-${uuidv4()}`
+
         const storageRef = ref(storage, 'images/' + fileName)
+
         const uploadTask = uploadBytesResumable(storageRef, image)
 
         uploadTask.on(
@@ -152,6 +185,7 @@ function CreateListing() {
         )
       })
     }
+
     const imgUrls = await Promise.all(
       [...images].map((image) => storeImage(image))
     ).catch(() => {
@@ -170,24 +204,27 @@ function CreateListing() {
     formDataCopy.location = address
     delete formDataCopy.images
     delete formDataCopy.address
+    !formDataCopy.offer && delete formDataCopy.discountedPrice
 
-    !formDataCopy.offer && delete formDataCopy.discountPrice
-
-    const docRef = await addDoc(collection(db, 'listings'), formDataCopy)
+    // Update listing
+    const docRef = doc(db, 'listings', params.listingId)
+    await updateDoc(docRef, formDataCopy)
     setLoading(false)
     toast.success('Listing saved')
-    navigate(`/category/${formDataCopy.tyoe}/${docRef.id}`)
+    navigate(`/category/${formDataCopy.type}/${docRef.id}`)
   }
 
   const onMutate = (e) => {
     let boolean = null
+
     if (e.target.value === 'true') {
       boolean = true
     }
     if (e.target.value === 'false') {
       boolean = false
     }
-    //files
+
+    // Files
     if (e.target.files) {
       setFormData((prevState) => ({
         ...prevState,
@@ -195,6 +232,7 @@ function CreateListing() {
       }))
     }
 
+    // Text/Booleans/Numbers
     if (!e.target.files) {
       setFormData((prevState) => ({
         ...prevState,
@@ -210,8 +248,9 @@ function CreateListing() {
   return (
     <div className='profile'>
       <header>
-        <p className='pageHeader'>Create a Listing</p>
+        <p className='pageHeader'>Edit Listing</p>
       </header>
+
       <main>
         <form onSubmit={onSubmit}>
           <label className='formLabel'>Sell / Rent</label>
@@ -235,6 +274,7 @@ function CreateListing() {
               Rent
             </button>
           </div>
+
           <label className='formLabel'>Name</label>
           <input
             className='formInputName'
@@ -246,12 +286,13 @@ function CreateListing() {
             minLength='10'
             required
           />
+
           <div className='formRooms flex'>
             <div>
               <label className='formLabel'>Bedrooms</label>
               <input
-                type='number'
                 className='formInputSmall'
+                type='number'
                 id='bedrooms'
                 value={bedrooms}
                 onChange={onMutate}
@@ -263,8 +304,8 @@ function CreateListing() {
             <div>
               <label className='formLabel'>Bathrooms</label>
               <input
-                type='number'
                 className='formInputSmall'
+                type='number'
                 id='bathrooms'
                 value={bathrooms}
                 onChange={onMutate}
@@ -274,6 +315,7 @@ function CreateListing() {
               />
             </div>
           </div>
+
           <label className='formLabel'>Parking spot</label>
           <div className='formButtons'>
             <button
@@ -325,6 +367,7 @@ function CreateListing() {
               No
             </button>
           </div>
+
           <label className='formLabel'>Address</label>
           <textarea
             className='formInputAddress'
@@ -334,27 +377,28 @@ function CreateListing() {
             onChange={onMutate}
             required
           />
+
           {!geolocationEnabled && (
-            <div className='formLating flex'>
+            <div className='formLatLng flex'>
               <div>
                 <label className='formLabel'>Latitude</label>
                 <input
+                  className='formInputSmall'
                   type='number'
                   id='latitude'
                   value={latitude}
                   onChange={onMutate}
-                  className='formInputSmall'
                   required
                 />
               </div>
               <div>
                 <label className='formLabel'>Longitude</label>
                 <input
+                  className='formInputSmall'
                   type='number'
                   id='longitude'
                   value={longitude}
                   onChange={onMutate}
-                  className='formInputSmall'
                   required
                 />
               </div>
@@ -406,8 +450,8 @@ function CreateListing() {
               <input
                 className='formInputSmall'
                 type='number'
-                id='discountPrice'
-                value={discountPrice}
+                id='discountedPrice'
+                value={discountedPrice}
                 onChange={onMutate}
                 min='50'
                 max='750000000'
@@ -431,7 +475,7 @@ function CreateListing() {
             required
           />
           <button type='submit' className='primaryButton createListingButton'>
-            Create Listing
+            Edit Listing
           </button>
         </form>
       </main>
@@ -439,4 +483,4 @@ function CreateListing() {
   )
 }
 
-export default CreateListing
+export default EditListing

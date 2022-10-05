@@ -327,6 +327,7 @@ button {
 
 .swiperSlideDiv {
   position: relative;
+  padding-top: 27rem;
   width: 100%;
   height: 100%;
 }
